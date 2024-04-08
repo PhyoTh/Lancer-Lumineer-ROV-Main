@@ -1,44 +1,34 @@
-import pygame.camera
+# import pygame.camera
 import json
 import time
 import pygame
 import math  # needed for joystick
-import widgets2 as widgets # needed to make widgets function properly
+import widgets2 as widgets
+import JoyStick_constants as JoyStick
 import serial  # needed to talk with Arduino
-import os  # for creating the picture folder
 
 # GUI window setup
 sideBarWidth = 300
 pygame.init()  # Initializes the pygame modules
-size = width, height = 900 + sideBarWidth, 800  # size of GUI
+size = width, height = 700 + sideBarWidth, 800  # size of GUI
 pygame.display.set_caption('ROV Control')
 screen = pygame.display.set_mode(size)
 screen.fill((16, 43, 87))
 
-# Define the name of the output folder
-folder_name = "ROV_3D"
-
-# Create the folder if it doesn't exist
-if not os.path.exists(folder_name):
-    os.makedirs(folder_name)
-
 # camera setup
-camera_width = 640
-camera_height = 400
-pygame.camera.init()  # Initializes the camera modules from the pygame library : Added 5/8/23
+# camera_width = 640
+# camera_height = 400
+# pygame.camera.init()  # Initializes the camera modules from the pygame library : Added 5/8/23
 
 # initialize two cameras (loading the camera modules)
-# Note: Camera indices typically begin with 0 (built in camera or first connected camera), then 1, 2, 3, etc..
-cam1 = pygame.camera.Camera(0, (camera_width, camera_height))  # Main camera (adjust camera index for your unique PC setup)
-# cam2 = pygame.camera.Camera(2, (camera_width, camera_height)) # Disabled to avoid servo claw jitter
-cameraSurface = pygame.Surface((camera_width, camera_height*2), pygame.SRCALPHA)
-
-transparency = 0
-cameraSurface.fill((0, 0, 0, transparency))
+# cam1 = pygame.camera.Camera(1, (camera_width, camera_height))  # for taking pictures
+# cameraSurface = pygame.Surface((camera_width, camera_height*2), pygame.SRCALPHA)
+# Creating camera surface for camera images to be rendered onto
+# transparency = 0
+# cameraSurface.fill((0, 0, 0, transparency))
 
 # start the cameras (turn on cameras)
-cam1.start()
-# cam2.start() # Disabled to avoid sersvo claw jitter
+# cam1.start()
 
 # setup displays in GUI
 guiScreen = pygame.Surface((80 + sideBarWidth, 800), pygame.SRCALPHA)
@@ -46,6 +36,7 @@ guiTransparency = 0
 guiScreen.fill((0, 0, 0, guiTransparency))
 
 onStatus = widgets.toggleable("Running", sideBarWidth)  # label and size toggle
+
 zSlider = widgets.sliderdisplay("Z", 100, 320)
 mLeftSlider = widgets.sliderdisplay("LeftSlider", 100, 320)
 mRightSlider = widgets.sliderdisplay("RightSlider", 100, 320)
@@ -54,54 +45,46 @@ temp_display = widgets.display("Temp (C)", sideBarWidth)
 th_up_display = widgets.display("Servo Up", sideBarWidth)
 th_left_display = widgets.display("Servo Left", sideBarWidth)
 th_right_display = widgets.display("Servo Right", sideBarWidth)
-claw_display = widgets.display("Main Claw Value", sideBarWidth)
+claw_display = widgets.display("Main Claw Value", sideBarWidth)  # Added 4/14/23 to set up object for claw value displays GUI
+rotate_display = widgets.display("Rotating Claw Value", sideBarWidth)  # Added 4/6/24 to set up object for rotating claw value displays GUI
 
-font = pygame.font.SysFont("monospace", 16)
+font = pygame.font.SysFont(None, 16)
 leftText = font.render("Left", True, (255, 255, 255))
 rightText = font.render("Right", True, (255, 255, 255))
 ZAxisText = font.render("Z-axis", True, (255, 255, 255))
 
-Controls = font.render("User Controls: ", True, (255, 255, 255)) 
-left_button = font.render("LB: Close Claw", True, (255, 255, 255))
-right_button = font.render("RB: Open Claw", True, (255, 255, 255))
-button_A = font.render("A: Toggle Max Thrust", True, (255, 255, 255))
-LF_Joy_Up = font.render("Left Joy Up: Forward", True, (255, 255, 255))
-LF_Joy_Down = font.render("Left Joy Down: Reverse", True, (255, 255, 255))
-LF_Joy_Left = font.render("Left Joy Left: Turn Left", True, (255, 255, 255))
-LF_Joy_Right = font.render("Left Joy Right: Turn Right", True, (255, 255, 255))
-RG_Joy_Up = font.render("Right Joy Up: Ascend", True, (255, 255, 255))
-RG_Joy_Down = font.render("Right Joy Down: Descend", True, (255, 255, 255))
-
-# Logo Image setup
-# loading the image
-# image = pygame.image.load("images/My project-1.png") # Can comment this line of code out if you do not have a logo file within same directory
-
-# Scale the image
-# scaledImage = pygame.transform.scale(image, (240, 200)) # Can comment this line of code out if you do not have a logo file within same directory
-
 # open serial com to Arduino
-ser = serial.Serial(port='COM6', baudrate=9600, timeout=.1, dsrdtr=True) # Can comment this out if Arduino board is not connected to USB serial port.
+ser = serial.Serial(port='/dev/cu.usbmodem21201', baudrate=9600, timeout=.1, dsrdtr=True)
 # dsrdtr=True stops Arduino Mega from auto resetting
 
 trigger_button = [False, False]  # Initialize False Boolean values for Left Button and Right Button
 # trigger_button = [(LeftButton State) = False, (RightButton State) = False].
-# This is so that the trigger buttons do not increment/decrement the clawValue unless triggered by user.
-
-# x_y_button = [False, False] # for D-pad controls
-
+# This is so that the trigger buttons do not increment/decrement the clawValue
+# unless triggered by user.
+x_y_button = [False, False]
+# setup for spare servo motor; Initialize False Boolean values for X (button 1) and Y button (button 3)
 # Initialize min/max and clawValues
-max_value = 80  # After some tests with the claw, 0-80 is the ideal safe operating range for the claw (0 = fully closed, 80 = fully opened.)
+max_value = 60  # After initial tests with the claw, 0-65 is the ideal safe operating range for the claw (0 = fully closed, 65 = fully opened.)
 min_value = 0
 clawValue = 0
+rotateValue = 0
+
+'''
+*Note*: The range is specified here in Python, but is then rescaled in the Arduino sketch to be in the range from 1000-1650
+Notice that when this Python program runs, the claw/servo values displayed will range from 1000-1650. This range can be freely adjusted.
+'''
+
 # Initialize joystick
 joystick = None
 if pygame.joystick.get_count() == 0:
     print('No joystick Detected')
 else:
     joystick = pygame.joystick.Joystick(0)
-    joystick.init()  # initialize joystick
+    joystick.init()  # initalize joystick
+
 # Set the variable to control image capture
 capture_count = 0
+
 # Main Event Loop
 while True:
     # Get input from joystick and keyboard
@@ -109,8 +92,8 @@ while True:
     key = pygame.key.get_pressed()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            cam1.stop()
-            # cam2.stop() # Disabled to avoid servo claw jitter
+            # cam1.stop()
+
             pygame.quit()
             quit()
         if event.type == pygame.JOYBUTTONDOWN:
@@ -118,70 +101,94 @@ while True:
                 onStatus.toggle()
 
         if event.type == pygame.JOYBUTTONDOWN:  # Using JoyButtonDown method (trigger button is pressed or x/y buttons are pressed)
-            if event.button == 4:  # Left Button on Controller
+            if event.button == JoyStick.LB:  # Left Button on Controller
                 trigger_button[0] = True
-            elif event.button == 5:  # Right Button on Controller
+            elif event.button == JoyStick.RB:  # Right Button on Controller
                 trigger_button[1] = True
-
+            elif event.button == JoyStick.X:  # X button on the Controller
+                x_y_button[0] = True
+                print(event)
+            elif event.button == JoyStick.Y:  # Y button on the Controller
+                x_y_button[1] = True
+                print(event)
         if event.type == pygame.JOYBUTTONUP:  # Using JoyButtonUp method (trigger button is released or x/y buttons are released)
-            if event.button == 4:  # If Left Trigger Button is released, then set Boolean value back to False
+            if event.button == JoyStick.LB:  # If Left Trigger Button is released, then set Boolean value back to False
                 trigger_button[0] = False
-            elif event.button == 5:  # If Right Trigger Button is released, then set Boolean value back to False
+            elif event.button == JoyStick.RB:  # If Right Trigger Button is released, then set Boolean value back to False
                 trigger_button[1] = False
-        # Originally for task 2.1 Coral Head 3D modeling via Underwater Photogrammetry. (Completely unused in the end)
-        if event.type == pygame.JOYBUTTONDOWN:  # for taking pictures
-            if event.button == 1:
-                capture_count += 1
-                img_filename = f'ROV_3D/capture_{capture_count}.jpg'
-                img_surface = cam1.get_image()
-                pygame.image.save(img_surface, img_filename)
-                print(f"Image captured and saved as {img_filename}")
-
-        # Optional: Rebinded forward/reverse thruster movement to D-pad (ran out of time to fully test this feature)
-        # if event.type == pygame.JOYHATMOTION:
-        #     hat_state = joystick.get_hat(0) # Index 0 means the first available d-pad on the controller
-        #     if hat_state == (0, 1):  # D-pad pointing up
-        #         x_y_button[0] = True
-        #     elif hat_state == (0, -1):
-        #         x_y_button[1] = True
-        #     else:
-        #         x_y_button = [False, False]
+            elif event.button == JoyStick.X:  # If X button is released, then set Boolean value back to False
+                x_y_button[0] = False
+                print(event)
+            elif event.button == JoyStick.Y:  # If Y button is released, then set Boolean value back to False
+                x_y_button[1] = False
+                print(event)
 
     # Incrementing/Decrementing the Main Claw Values
     if trigger_button[0] == True:
-        if clawValue >= max_value:
-            clawValue = max_value
-        else:
-            clawValue += 5  # After some testing, increment and decrement value of 5 is the most optimal.
+        clawValue += 5  # After some testing, increment and decrement value of 5 is the most optimal. Adjust if needed.
     elif trigger_button[1] == True:
-        if clawValue <= min_value:
-            clawValue = min_value
-        else:
-            clawValue -= 5
+        clawValue -= 5
     # Sets the ClawValue to the value the moment the button is released.
     elif trigger_button[0] == False:
         clawValue = clawValue
     elif trigger_button[1] == False:
         clawValue = clawValue
 
+    # Incrementing/Decrementing the Servo1 Values
+    if x_y_button[0] == True:
+        rotateValue += 5  # After some testing, increment and decrement value of 5 is the most optimal. Adjust if needed.
+    if x_y_button[1] == True:
+        rotateValue -= 5
+
+    # Sets the 2nd Servo to the value the moment the button is released.
+    if x_y_button[0] == False:
+        rotateValue = rotateValue
+    if x_y_button[1] == False:
+        rotateValue = rotateValue
+
+    # Limit value to minimum; Establishes floor condition
+    if clawValue < min_value:
+        clawValue = min_value
+    # Limit value to maximum; Establishs ceiling condition
+    if clawValue > max_value:
+        clawValue = max_value
+
+    # Limit value to minimum; Establishes floor condition for second servo motor
+    if rotateValue < min_value:
+        rotateValue = min_value
+    # Limit value to maximum; Establishs ceiling condition for second servo motor
+    if rotateValue > max_value:
+        rotateValue = max_value
+
+    '''
+    Archived Code: Repeated button presses to Open and Close the claw
+    if event.button == 2: # X Button (Opens the claw)
+        clawValue -= 10 # set 
+        if clawValue < 0: # set minimum value/ Prevents any negative value for the motor direction values. Establishes a floor condition.
+            clawValue = 0 # Resets any negative motor direction values to the minimum value.
+    if event.button == 3: # Y Button (Close the claw)
+        clawValue += 10   # Increments value for fine tuning control
+        if clawValue > 100: # set maximum value (ceiling)
+            clawValue = 100 # If this value is reached, the claw is completely open.
+    '''
+
 # Commands to send ROV
     commands = {}  # define python dictionary
     if joystick is not None:
-        x = joystick.get_axis(1)  # left joystick -1 is left to +1 is right (left thruster)
-        y = joystick.get_axis(0)  # left joystick -1 is up +1 is down (right thruster)
-        z = joystick.get_axis(3)  # right joystick x-axis, used for vertical
+        x = joystick.get_axis(JoyStick.L_ANALOG_X)  # left joystick -1 is left to +1 is right (left thruster)
+        y = joystick.get_axis(JoyStick.L_ANALOG_Y)  # left joystick -1 is up +1 is down (right thruster)
+        z = joystick.get_axis(JoyStick.R_ANALOG_Y)  # right joystick x-axis, used for vertical
 
-    if abs(x) < .5:  # define a dead zone
+    if abs(x) < .2:  # define a dead zone
         x = 0
-    if abs(y) < .5:  # define a dead zone
+    if abs(y) < .2:  # define a dead zone
         y = 0
     if abs(z) < .2:  # define a dead zone
         z = 0
-    # When the status is toggled to "On" by pressing Button A on the controller:
-    # Limits thrust for SURGE direction (forward/backward).
-    if onStatus.state:
-        x = x * 1.414  # gives value of 1 for full thrust forward and backwards
+
+    if onStatus.state:  # When the status is toggled to "On" by pressing Button A on the controller: Limits thrust for SURGE direction (forward/backward).
         y = y * 1.414  # gives value of 1 for full thrust forward and backwards
+        x = x * 1.414  # gives value of 1 for full thrust forward and backwards
 
     # rotate x and y-axis of joystick 45 degrees
     x_new = (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))  # horizontal left
@@ -204,21 +211,11 @@ while True:
     commands['tright'] = y_new ** 3
     commands['tup'] = z ** 3
     commands['claw'] = clawValue  # send the claw value
+    commands['rotate'] = rotateValue  # send the servo value to arduino Addded: 4/6/24
 
-    # Optional rebinding of Forward/Reverse to D-pad on the Xbox controller.
-    # if x_y_button[0] == True and joystick is not None:
-    #     commands['tleft'] = 0.5 ** 3
-    #     commands['tright'] = 0.5 ** 3
-    # if x_y_button[1] == True and joystick is not None:
-    #     commands['tleft'] == -0.5 ** 3
-    #     commands['tright'] == -0.5 ** 3
-    # if x_y_button[0] == False and x_y_button[1] == False and joystick is None:
-    #     commands['tleft'] = 0
-    #     commands['tright'] = 0
-
-    mLeftSlider.value = - commands['tleft']  # assign thruster values to a display
+    mLeftSlider.value = commands['tleft']  # assign thruster values to a display
     mRightSlider.value = commands['tright']
-    zSlider.value = - commands['tup']
+    zSlider.value = commands['tup']
 
     MESSAGE = json.dumps(commands)  # puts python dictionary in Json format
     ser.write(bytes(MESSAGE, 'utf-8'))  # byte format sent to arduino
@@ -233,6 +230,7 @@ while True:
         th_left_display.value = dict_json['sig_lf']  # vertical thruster value from Arduino
         th_right_display.value = dict_json['sig_rt']  # vertical thruster value from Arduino
         claw_display.value = dict_json['claw']  # claw value from Arduino
+        rotate_display.value = dict_json['rotate']  # servo value from Arduino
 
         ser.flush()
 
@@ -241,43 +239,31 @@ while True:
 
     pass
     # Draw Stuff (Rendering the data as a display for the GUI)
-    dHeight = onStatus.get_height() # get the height of the toggleable widget
-    guiScreen.blit(onStatus.render(), (0, 0)) # blitting the running status
-    guiScreen.blit(mLeftSlider.render(), (0, 9 * dHeight)) # blitting thruster values
-    guiScreen.blit(mRightSlider.render(), (100, 9 * dHeight)) # blitting thruster values
-    guiScreen.blit(zSlider.render(), (200, 9 * dHeight))  # blitting thruster values
+    dheight = onStatus.get_height()
+    guiScreen.blit(onStatus.render(), (0, 0))
+    guiScreen.blit(mLeftSlider.render(), (0, 9 * dheight))
+    guiScreen.blit(mRightSlider.render(), (100, 9 * dheight))
+    guiScreen.blit(zSlider.render(), (200, 9 * dheight))  # blitting thruster values
 
-    guiScreen.blit(temp_display.render(), (0, dHeight))  # blitting temperature values# pick a font you have and set its size
-    guiScreen.blit(th_up_display.render(), (0, 2 * dHeight)) # blitting thruster values
-    guiScreen.blit(th_left_display.render(), (0, 3 * dHeight)) # blitting thruster values
-    guiScreen.blit(th_right_display.render(), (0, 4 * dHeight)) # blitting thruster values
-    guiScreen.blit(claw_display.render(), (0, 5 * dHeight))  # display the claw value on the screen
+    guiScreen.blit(temp_display.render(), (0, dheight))  # blitting temperature values# pick a font you have and set its size
+    guiScreen.blit(th_up_display.render(), (0, 2 * dheight))
+    guiScreen.blit(th_left_display.render(), (0, 3 * dheight))
+    guiScreen.blit(th_right_display.render(), (0, 4 * dheight))
+    guiScreen.blit(claw_display.render(), (0, 5 * dheight))  # display the claw value on the screen
+    guiScreen.blit(rotate_display.render(), (0, 6 * dheight))  # display the claw value on the screen
 
     # Capture images from the camera (cameras 1 and 2)
-    img1 = cam1.get_image()
-    # img2 = cam2.get_image() # Camera 2 disabled to avoid servo claw jitter. 
+    # img1 = cam1.get_image()
 
     # Rendering camera display images onto the GUI menu
-    cameraSurface.blit(img1, (0, 0))  # surface for camera 1
-    # cameraSurface.blit(img2, (0, 400))  # surface for camera 2
+    # cameraSurface.blit(img1, (0, 0))  # surface for camera 1
 
-    # Rendering more labeling and display elements onto Pygame window.
-    screen.blit(cameraSurface, (460, 0))  # 2 cameras
+    # screen.blit(cameraSurface, (460, 0))  
     screen.blit(guiScreen, (0, 140))  # all the gui
-    # screen.blit(scaledImage, (10, -60))  # discord logo
-# Rending the text for the user controls onto the GUI window as defined in the beginning of the code.
+
     screen.blit(leftText, (15, 290))
     screen.blit(rightText, (115, 290))
     screen.blit(ZAxisText, (215, 290))
-    screen.blit(Controls, (720, 390))
-    screen.blit(left_button, (650, 425))
-    screen.blit(right_button, (650, 450))
-    screen.blit(button_A, (650, 470))
-    screen.blit(LF_Joy_Up, (650, 495))
-    screen.blit(LF_Joy_Down, (650, 520))
-    screen.blit(LF_Joy_Left, (650, 550))
-    screen.blit(LF_Joy_Right, (650, 570))
-    screen.blit(RG_Joy_Up, (650, 600))
-    screen.blit(RG_Joy_Down, (650, 620))
 
     pygame.display.flip()  # update screen for all rectangular images
+    time.sleep(0.01)
