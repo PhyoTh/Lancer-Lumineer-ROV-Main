@@ -1,4 +1,7 @@
-'''Purpose: In case of changing the joystick, the following constants should be updated'''
+'''
+Purpose: In case of changing the joystick, the following constants should be updated
+Usage: for ROV_main.py
+'''
 
 ''' xbox wireless controller all buttons and axis
 A = 0

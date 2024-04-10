@@ -1,3 +1,8 @@
+'''
+Purpose: To create widgets for the GUI
+Usage: for ROV_main.py
+'''
+
 import pygame
 
 '''Class for Toggleable Widgets'''

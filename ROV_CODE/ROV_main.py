@@ -1,3 +1,11 @@
+'''
+Purpose: main script for the ROV control
+ERROR: Claw and Clawvalue are not incrementing and decrementing at all
+ERROR: Reading from serial is not working; it gets nothing with read into var data
+To-do at home: just use controller and see if the values are incresing and decreasing with this code
+One thing that pop out in my mind: try to see if vscode can run arduino
+'''
+
 import widgets2 as widgets
 import JoyStick_constants as JoyStick
 
@@ -7,7 +15,7 @@ import json #to convert python dictionary to json format
 import serial #to communicate with Arduino Mega Board
 
 '''---DEBUGGING purpose---'''
-DEBUG = False
+DEBUG = True
 
 '''---Display purpose: window (16:9) and mac (16:10) have different screen ratios---'''
 WINDOW = False #if running on Windows, set to True
@@ -50,8 +58,10 @@ guiTransparency = 0
 guiScreen.fill((0, 0, 0, guiTransparency)) #(0, 0, 0, guiTransparency) is black with transparency
 
 onStatus = widgets.toggleable("Thrusters-Turbo Mode", sideBarWidth)
+volt_display = widgets.display("Voltage (V)", sideBarWidth)
 temp_display = widgets.display("Temp (C)", sideBarWidth)
-th_up_display = widgets.display("Servo Up", sideBarWidth)
+th_up_left_display = widgets.display("Servo Up (Left)", sideBarWidth)
+th_up_right_display = widgets.display("Servo Up (Right)", sideBarWidth)
 th_left_display = widgets.display("Servo Left", sideBarWidth)
 th_right_display = widgets.display("Servo Right", sideBarWidth)
 claw_display = widgets.display("Main Claw Value", sideBarWidth)
@@ -102,41 +112,29 @@ while True:
             quit()
             
         elif event.type == pygame.JOYBUTTONDOWN:
-            print("Button {} pressed".format(event.button))
+            # print("Button {} pressed".format(event.button))
             
             if event.button == JoyStick.A:  #for toggling max thruster status On/Off
                 onStatus.toggle()
-                
             if event.button == JoyStick.LB and trigger_button[1] == False: #for closing the claw
                 trigger_button[0] = True
-                if not clawValue <= MIN_CLAW:
-                    clawValue -= 5
-                    
             if event.button == JoyStick.RB and trigger_button[0] == False: #for opening the claw
                 trigger_button[1] = True
-                if not clawValue >= MAX_CLAW:
-                    clawValue += 5
-                
             if event.button == JoyStick.X and x_y_button[1] == False: #for rotating the claw left
                 x_y_button[0] = True
-                if not clawRotate <= MIN_CLAW_ROTATE:
-                    clawRotate -= 5
-                
             if event.button == JoyStick.Y and x_y_button[0] == False: #for rotating the claw right
                 x_y_button[1] = True
-                if not clawRotate >= MAX_CLAW_ROTATE:
-                    clawRotate += 5
                 
         elif event.type == pygame.JOYBUTTONUP:
-            print("Button {} released".format(event.button))
+            # print("Button {} released".format(event.button))
             
-            if event.button ==  JoyStick.LB and trigger_button[0] == True:
+            if event.button ==  JoyStick.LB:
                 trigger_button[0] = False
-            if event.button == JoyStick.RB and trigger_button[1] == True:
+            if event.button == JoyStick.RB:
                 trigger_button[1] = False
-            if event.button == JoyStick.X and x_y_button[0] == True:
+            if event.button == JoyStick.X:
                 x_y_button[0] = False
-            if event.button == JoyStick.Y and x_y_button[1] == True:
+            if event.button == JoyStick.Y:
                 x_y_button[1] = False
 
         for i in range(joystick.get_numaxes()):
@@ -144,21 +142,30 @@ while True:
                 
             if i == JoyStick.L_ANALOG_X: #left joystick x-axis for rov head rotate
                 x = joystick.get_axis(i) * turbo
-                x = 0 if abs(x) < .5 else x #deadzone
+                x = 0 if abs(x) < .3 else x #deadzone
                 
             if i == JoyStick.L_ANALOG_Y: #left joystick y-axis for rov head tilt
                 y = joystick.get_axis(i) * turbo
-                y = 0 if abs(y) < .5 else y #deadzone
+                y = 0 if abs(y) < .3 else y #deadzone
                 
             if i == JoyStick.R_ANALOG_Y: #right joystick y-axis for vertical
                 z = joystick.get_axis(i) * turbo
-                z = 0 if abs(z) < .5 else z #deadzone
+                z = 0 if abs(z) < .3 else z #deadzone
             
             ''' UNDER MAINTENANCE: Haven't tested in water yet
             if i == JoyStick.R_ANALOG_X: #right joystick x-axis for crabbing 
                 c = joystick.get_axis(i) * turbo
                 c = 0 if abs(c) < .5 else c #deadzone '''
-                
+
+    if trigger_button[0] == True and not clawValue <= MIN_CLAW:
+        clawValue -= 5
+    if trigger_button[1] == True and not clawValue >= MAX_CLAW:
+        clawValue += 5
+    if x_y_button[0] == True and not clawRotate <= MIN_CLAW_ROTATE:
+        clawRotate -= 5
+    if x_y_button[1] == True and not clawRotate >= MAX_CLAW_ROTATE:
+        clawRotate += 5
+
     # Math for analog 45 degree angles
     x_new = (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))
     x_new = min(max(x_new, -1.0), 1.0) #if x_new is less than -1, x_new = -1; if x_new is greater than 1, x_new = 1
@@ -181,43 +188,43 @@ while True:
     commands['claw'] = clawValue
     commands['claw_rotate'] = clawRotate
 
-    if DEBUG:
-        print("---Before parsing to JSON---")
-        print("tleft: ", commands['claw_rotate'])
-        print("tright: ", commands['tright'])
-        print("tup: ", commands['tup'])
-        print("claw: ", commands['claw'])
-        print("claw_rotate: ", commands['claw_rotate'])
-    
     MESSAGE = json.dumps(commands)  #puts python dictionary in Json format to MESSAGE as string
+    if (DEBUG):
+        print("---Printing Json formatted data---")
+        print(MESSAGE)
     ser.write(bytes(MESSAGE, 'utf-8'))  #byte format sent to Arduino
     ser.flush() #it ensures that ser.write is completed before moving on
+    ser.close() #close the serial port so that Arduino can use the port to read that data
     
-    if DEBUG:
-        print("---After parsing to Arduino JSON---")
-        print("tleft: ", commands['claw_rotate'])
-        print("tright: ", commands['tright'])
-        print("tup: ", commands['tup'])
-        print("claw: ", commands['claw'])
-        print("claw_rotate: ", commands['claw_rotate'])
-        
+    # if DEBUG:
+    #     print("---After parsing to Arduino JSON---")
+    #     print(commands)
+
     try:
-        dict_json = json.loads(ser.readline().decode('utf-8')) #read a line from Arduino and decode it to utf-8
+        ser.open() #open the serial port to read from Arduino
+        data = ser.readline().decode("utf-8") #read a line from Arduino and decode it to utf-8
+        if (DEBUG):
+            print ("---Printing decoded data from serial---")
+            print (data)
+        dict_json = json.loads(data) #read a line from Arduino and decode it to utf-8
         if DEBUG:
             print("---The whole JSON file---")
             print(dict_json)
-        
+        ser.close() #close the serial port so that Arduino can use the port to read that data
         # Pass the values to the display widgets
-        temp_display.value = dict_json['volt']  #assign temp to dispaly
-        th_up_display.value = dict_json['sig_up_1']  #vertical thruster value from Arduino
-        th_left_display.value = dict_json['sig_lf']  #vertical thruster value from Arduino
-        th_right_display.value = dict_json['sig_rt']  #vertical thruster value from Arduino
+        volt_display.value = dict_json['volt'] #assign voltage to display
+        temp_display.value = dict_json['temp']  #assign voltage to display
+        th_left_display.value = dict_json['tleft']  #vertical thruster value from Arduino
+        th_right_display.value = dict_json['tright']  #vertical thruster value from Arduino
+        th_up_left_display.value = dict_json['tupL']  #vertical thruster value from Arduino
+        th_up_right_display.value = dict_json['tupR']  #vertical thruster value from Arduino
         claw_display.value = dict_json['claw']  #claw value from Arduino
         claw_rotate_display.value = dict_json['claw_rotate'] #servo value from Arduino
         ser.flush()
 
     except Exception as e:
-        print(e)
+        print("---Exception occured when reading from Arduino---")
+        print()
 
     pass
     # Draw Stuff (Rendering the data as a display for the GUI)
@@ -227,12 +234,14 @@ while True:
     guiScreen.blit(mRightSlider.render(), (100, 9 * dHeight)) #blitting thruster values
     guiScreen.blit(zSlider.render(), (200, 9 * dHeight))  #blitting thruster values
 
+    guiScreen.blit(volt_display.render(), (0, dHeight))  #blitting voltage values, pick a font you have and set its size
     guiScreen.blit(temp_display.render(), (0, dHeight))  #blitting temperature values, pick a font you have and set its size
-    guiScreen.blit(th_up_display.render(), (0, 2 * dHeight)) #blitting thruster values
-    guiScreen.blit(th_left_display.render(), (0, 3 * dHeight)) #blitting thruster values
-    guiScreen.blit(th_right_display.render(), (0, 4 * dHeight)) #blitting thruster values
-    guiScreen.blit(claw_display.render(), (0, 5 * dHeight))  #display the claw value on the screen
-    guiScreen.blit(claw_rotate_display.render(),( 0, 6* dHeight))
+    guiScreen.blit(th_up_left_display.render(), (0, 2 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_up_right_display.render(), (0, 3 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_left_display.render(), (0, 4 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_right_display.render(), (0, 5 * dHeight)) #blitting thruster values
+    guiScreen.blit(claw_display.render(), (0, 6 * dHeight))  #display the claw value on the screen
+    guiScreen.blit(claw_rotate_display.render(),( 0, 7 * dHeight)) #display the claw rotate value on the screen
     
     # Rendering more labeling and display elements onto Pygame window.
     screen.blit(guiScreen, (0, 140))  #all the gui
