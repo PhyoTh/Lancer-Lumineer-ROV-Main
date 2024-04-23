@@ -5,10 +5,8 @@ ERROR: Reading from serial is not working; it gets nothing with read into var da
 To-do at home: just use controller and see if the values are incresing and decreasing with this code
 One thing that pop out in my mind: try to see if vscode can run arduino
 '''
-
 import widgets2 as widgets
 import JoyStick_constants as JoyStick
-
 import pygame
 import math
 import json #to convert python dictionary to json format
@@ -29,7 +27,7 @@ if WINDOW:
     fps = 60 #60fps
 elif MAC:
     size = width, height = 980 + sideBarWidth, 800 #1280 x 800
-    fps = 240 #240fps ( mac is better:> )
+    fps = 240 #240fps
 
 '''---SETUPs---'''
 # Open serial port to communicate with Arduino Mega Board
@@ -76,8 +74,6 @@ font = pygame.font.SysFont(None, 16)
 leftText = font.render("Left", True, (255, 255, 255))
 rightText = font.render("Right", True, (255, 255, 255))
 ZAxisText = font.render("Z-axis", True, (255, 255, 255))
-
-# User Controls setup
 Controls = font.render("User Controls: ", True, (255, 255, 255)) 
 left_button = font.render("LB: Close Claw", True, (255, 255, 255))
 right_button = font.render("RB: Open Claw", True, (255, 255, 255))
@@ -137,26 +133,6 @@ while True:
             if event.button == JoyStick.Y:
                 x_y_button[1] = False
 
-        for i in range(joystick.get_numaxes()):
-            turbo = 1.414 if onStatus.state else 1 #TURBO MODE FOR PRO PILOTs
-                
-            if i == JoyStick.L_ANALOG_X: #left joystick x-axis for rov head rotate
-                x = joystick.get_axis(i) * turbo
-                x = 0 if abs(x) < .3 else x #deadzone
-                
-            if i == JoyStick.L_ANALOG_Y: #left joystick y-axis for rov head tilt
-                y = joystick.get_axis(i) * turbo
-                y = 0 if abs(y) < .3 else y #deadzone
-                
-            if i == JoyStick.R_ANALOG_Y: #right joystick y-axis for vertical
-                z = joystick.get_axis(i) * turbo
-                z = 0 if abs(z) < .3 else z #deadzone
-            
-            ''' UNDER MAINTENANCE: Haven't tested in water yet
-            if i == JoyStick.R_ANALOG_X: #right joystick x-axis for crabbing 
-                c = joystick.get_axis(i) * turbo
-                c = 0 if abs(c) < .5 else c #deadzone '''
-
     if trigger_button[0] == True and not clawValue <= MIN_CLAW:
         clawValue -= 5
     if trigger_button[1] == True and not clawValue >= MAX_CLAW:
@@ -165,6 +141,26 @@ while True:
         clawRotate -= 5
     if x_y_button[1] == True and not clawRotate >= MAX_CLAW_ROTATE:
         clawRotate += 5
+
+    for i in range(joystick.get_numaxes()):
+        turbo = 1.414 if onStatus.state else 1 #TURBO MODE
+            
+        if i == JoyStick.L_ANALOG_X: #left joystick x-axis for rov head rotate
+            x = joystick.get_axis(i) * turbo
+            x = 0 if abs(x) < .3 else x #deadzone
+            
+        if i == JoyStick.L_ANALOG_Y: #left joystick y-axis for rov head tilt
+            y = joystick.get_axis(i) * turbo
+            y = 0 if abs(y) < .3 else y #deadzone
+            
+        if i == JoyStick.R_ANALOG_Y: #right joystick y-axis for vertical
+            z = joystick.get_axis(i) * turbo
+            z = 0 if abs(z) < .3 else z #deadzone
+            
+        ''' UNDER MAINTENANCE: Haven't tested in water yet
+        if i == JoyStick.R_ANALOG_X: #right joystick x-axis for crabbing 
+            c = joystick.get_axis(i) * turbo
+            c = 0 if abs(c) < .5 else c #deadzone '''
 
     # Math for analog 45 degree angles
     x_new = (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))
@@ -194,14 +190,12 @@ while True:
         print(MESSAGE)
     ser.write(bytes(MESSAGE, 'utf-8'))  #byte format sent to Arduino
     ser.flush() #it ensures that ser.write is completed before moving on
-    ser.close() #close the serial port so that Arduino can use the port to read that data
     
     # if DEBUG:
     #     print("---After parsing to Arduino JSON---")
     #     print(commands)
 
     try:
-        ser.open() #open the serial port to read from Arduino
         data = ser.readline().decode("utf-8") #read a line from Arduino and decode it to utf-8
         if (DEBUG):
             print ("---Printing decoded data from serial---")
@@ -210,7 +204,6 @@ while True:
         if DEBUG:
             print("---The whole JSON file---")
             print(dict_json)
-        ser.close() #close the serial port so that Arduino can use the port to read that data
         # Pass the values to the display widgets
         volt_display.value = dict_json['volt'] #assign voltage to display
         temp_display.value = dict_json['temp']  #assign voltage to display
@@ -235,18 +228,17 @@ while True:
     guiScreen.blit(zSlider.render(), (200, 9 * dHeight))  #blitting thruster values
 
     guiScreen.blit(volt_display.render(), (0, dHeight))  #blitting voltage values, pick a font you have and set its size
-    guiScreen.blit(temp_display.render(), (0, dHeight))  #blitting temperature values, pick a font you have and set its size
-    guiScreen.blit(th_up_left_display.render(), (0, 2 * dHeight)) #blitting thruster values
-    guiScreen.blit(th_up_right_display.render(), (0, 3 * dHeight)) #blitting thruster values
-    guiScreen.blit(th_left_display.render(), (0, 4 * dHeight)) #blitting thruster values
-    guiScreen.blit(th_right_display.render(), (0, 5 * dHeight)) #blitting thruster values
-    guiScreen.blit(claw_display.render(), (0, 6 * dHeight))  #display the claw value on the screen
-    guiScreen.blit(claw_rotate_display.render(),( 0, 7 * dHeight)) #display the claw rotate value on the screen
+    guiScreen.blit(temp_display.render(), (0,2 * dHeight))  #blitting temperature values, pick a font you have and set its size
+    guiScreen.blit(th_up_left_display.render(), (0, 3 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_up_right_display.render(), (0, 4 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_left_display.render(), (0, 5 * dHeight)) #blitting thruster values
+    guiScreen.blit(th_right_display.render(), (0, 6 * dHeight)) #blitting thruster values
+    guiScreen.blit(claw_display.render(), (0, 7 * dHeight))  #display the claw value on the screen
+    guiScreen.blit(claw_rotate_display.render(),( 0, 8 * dHeight)) #display the claw rotate value on the screen
     
     # Rendering more labeling and display elements onto Pygame window.
     screen.blit(guiScreen, (0, 140))  #all the gui
     # screen.blit(scaledImage, (10, -60))  #discord logo
-    # Rending the text for the user controls onto the GUI window as defined in the beginning of the code.
     screen.blit(leftText, (15, 290))
     screen.blit(rightText, (115, 290))
     screen.blit(ZAxisText, (215, 290))
