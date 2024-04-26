@@ -6,19 +6,14 @@ boolean DEBUG = false;
 // SERVO DEFINITIONS and ASSIGN SIGNALS
 Servo servo_lf;
 byte servoPin_lf= 22; //clockwise; horizontal
-
 Servo servo_rt;
 byte servoPin_rt= 23; //counter-clockwise; horizontal
-
 Servo servo_up2;
 byte servoPin_up2 = 24; //clockwise; vertical
-
 Servo servo_up1;
 byte servoPin_up1 = 25; //counter-clockwise; vertical
-
 Servo servo_claw; 
 byte servoPin_claw = 26; //assigning pin 26 to main claw
-
 Servo servo_rotate;
 byte servoPin_rotate = 27; //assigning pin 27 to servo 1
 
@@ -30,6 +25,7 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT); //initialize digital pin LED_BUILTIN as an output.
   pinMode(44,OUTPUT);
   digitalWrite(13,LOW);
+  Serial.begin(9600);
   
   // Attach servo to each belonging signal
   servo_lf.attach(servoPin_lf);
@@ -44,18 +40,16 @@ void setup()
 // MAIN
 void loop()
 {
-  Serial.begin(9600); //need to be reopened because of Serial.end() at the end
   while (!Serial.available()) { //exception if it can't read the BYTES sent from the serial port
     digitalWrite(13,HIGH);
     delay(100);
     digitalWrite(13,LOW);
     delay(100); }
 
-  //String thruster = Serial.readStringUntil( '\x7D' ); //read characters/date from serial port until "}" and buffer it into a string
-  String get_data = Serial.readStringUntil('\n');
-  Serial.setTimeout(10); //set maximum 10ms to wait for serial data (not necessary)
+  String get_data = Serial.readStringUntil('\n'); // or Serial.readStringUntil( '\x7D' );
+  // Serial.setTimeout(10); //set maximum 10ms to wait for serial data (not necessary)
 
-  StaticJsonDocument<2000> json_doc; //create StaticJsonDocument to read
+  StaticJsonDocument<1000> json_doc; //create StaticJsonDocument to read
   DeserializationError error = deserializeJson(json_doc,get_data); //deserialize/decode the BYTES read from serial in json format
   if (error){
     Serial.print("Parsing failed: ");
@@ -97,7 +91,7 @@ void loop()
 
   // Claw Rotate Servo
   int rotateInput = json_doc["claw_rotate"]; // inputs range from 0 to 100
-  int rotateSignal = rotateInput * 10 + 900; // range from 900 to 1700
+  int rotateSignal = rotateInput * 10 + 900; // range from 600 to 2400
   servo_rotate.writeMicroseconds(rotateSignal);
 
   // Read Temp
@@ -106,7 +100,7 @@ void loop()
   float cel = (mv/10); //temperature in Celsius
 
   // Write and send those values back in Json format
-  StaticJsonDocument<2000> doc;//define StaticJsonDocument
+  StaticJsonDocument<1000> doc;//define StaticJsonDocument
 
   //doc["temp"] = cel; *Python doesn't even read this??? 
   doc["volt"] = mv;
@@ -119,6 +113,5 @@ void loop()
   doc["claw_rotate"] = rotateSignal;
 
   serializeJson(doc,Serial); //convert to Json string,sends to surface
-  Serial.end(); //to allow Python to use it
-  delay(50); //allow gap time for Python
+  delay(10); //allow gap time for Python
 }

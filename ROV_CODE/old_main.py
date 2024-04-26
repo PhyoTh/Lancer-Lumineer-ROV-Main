@@ -1,10 +1,9 @@
-# import pygame.camera
+import pygame.camera
 import json
 import time
 import pygame
 import math  # needed for joystick
 import widgets2 as widgets
-import JoyStick_constants as JoyStick
 import serial  # needed to talk with Arduino
 
 # GUI window setup
@@ -21,10 +20,10 @@ screen.fill((16, 43, 87))
 # pygame.camera.init()  # Initializes the camera modules from the pygame library : Added 5/8/23
 
 # initialize two cameras (loading the camera modules)
-# cam1 = pygame.camera.Camera(1, (camera_width, camera_height))  # for taking pictures
+# cam1 = pygame.camera.Camera(0, (camera_width, camera_height))  # for taking pictures
 # cameraSurface = pygame.Surface((camera_width, camera_height*2), pygame.SRCALPHA)
 # Creating camera surface for camera images to be rendered onto
-# transparency = 0
+transparency = 0
 # cameraSurface.fill((0, 0, 0, transparency))
 
 # start the cameras (turn on cameras)
@@ -37,10 +36,12 @@ guiScreen.fill((0, 0, 0, guiTransparency))
 
 onStatus = widgets.toggleable("Running", sideBarWidth)  # label and size toggle
 
-zSlider = widgets.sliderdisplay("Z", 100, 320)
+leftUpSlider = widgets.sliderdisplay("leftUp", 100, 320)
+rightUpSlider = widgets.sliderdisplay("rightUp", 100, 320)
 mLeftSlider = widgets.sliderdisplay("LeftSlider", 100, 320)
 mRightSlider = widgets.sliderdisplay("RightSlider", 100, 320)
 
+volt_display = widgets.display("Volt", sideBarWidth)
 temp_display = widgets.display("Temp (C)", sideBarWidth)
 th_up_display = widgets.display("Servo Up", sideBarWidth)
 th_left_display = widgets.display("Servo Left", sideBarWidth)
@@ -48,13 +49,14 @@ th_right_display = widgets.display("Servo Right", sideBarWidth)
 claw_display = widgets.display("Main Claw Value", sideBarWidth)  # Added 4/14/23 to set up object for claw value displays GUI
 rotate_display = widgets.display("Rotating Claw Value", sideBarWidth)  # Added 4/6/24 to set up object for rotating claw value displays GUI
 
-font = pygame.font.SysFont(None, 16)
+font = pygame.font.SysFont("monospace", 16)
 leftText = font.render("Left", True, (255, 255, 255))
 rightText = font.render("Right", True, (255, 255, 255))
-ZAxisText = font.render("Z-axis", True, (255, 255, 255))
+leftUpText = font.render("Left Up", True, (255, 255, 255))
+rightUpText = font.render("Right Up", True, (255, 255, 255))
 
 # open serial com to Arduino
-ser = serial.Serial(port='/dev/cu.usbmodem21201', baudrate=9600, timeout=.1, dsrdtr=True)
+ser = serial.Serial(port='COM3', baudrate=9600, timeout=.1, dsrdtr=True)
 # dsrdtr=True stops Arduino Mega from auto resetting
 
 trigger_button = [False, False]  # Initialize False Boolean values for Left Button and Right Button
@@ -64,7 +66,8 @@ trigger_button = [False, False]  # Initialize False Boolean values for Left Butt
 x_y_button = [False, False]
 # setup for spare servo motor; Initialize False Boolean values for X (button 1) and Y button (button 3)
 # Initialize min/max and clawValues
-max_value = 60  # After initial tests with the claw, 0-65 is the ideal safe operating range for the claw (0 = fully closed, 65 = fully opened.)
+# rotate_max_value =
+max_value = 70  # After initial tests with the claw, 0-65 is the ideal safe operating range for the claw (0 = fully closed, 65 = fully opened.)
 min_value = 0
 clawValue = 0
 rotateValue = 0
@@ -83,7 +86,7 @@ else:
     joystick.init()  # initalize joystick
 
 # Set the variable to control image capture
-capture_count = 0
+# capture_count = 0
 
 # Main Event Loop
 while True:
@@ -101,25 +104,25 @@ while True:
                 onStatus.toggle()
 
         if event.type == pygame.JOYBUTTONDOWN:  # Using JoyButtonDown method (trigger button is pressed or x/y buttons are pressed)
-            if event.button == JoyStick.LB:  # Left Button on Controller
+            if event.button == 4:  # Left Button on Controller
                 trigger_button[0] = True
-            elif event.button == JoyStick.RB:  # Right Button on Controller
+            elif event.button == 5:  # Right Button on Controller
                 trigger_button[1] = True
-            elif event.button == JoyStick.X:  # X button on the Controller
+            elif event.button == 2:  # X button on the Controller
                 x_y_button[0] = True
                 print(event)
-            elif event.button == JoyStick.Y:  # Y button on the Controller
+            elif event.button == 3:  # Y button on the Controller
                 x_y_button[1] = True
                 print(event)
         if event.type == pygame.JOYBUTTONUP:  # Using JoyButtonUp method (trigger button is released or x/y buttons are released)
-            if event.button == JoyStick.LB:  # If Left Trigger Button is released, then set Boolean value back to False
+            if event.button == 4:  # If Left Trigger Button is released, then set Boolean value back to False
                 trigger_button[0] = False
-            elif event.button == JoyStick.RB:  # If Right Trigger Button is released, then set Boolean value back to False
+            elif event.button == 5:  # If Right Trigger Button is released, then set Boolean value back to False
                 trigger_button[1] = False
-            elif event.button == JoyStick.X:  # If X button is released, then set Boolean value back to False
+            elif event.button == 2:  # If X button is released, then set Boolean value back to False
                 x_y_button[0] = False
                 print(event)
-            elif event.button == JoyStick.Y:  # If Y button is released, then set Boolean value back to False
+            elif event.button == 3:  # If Y button is released, then set Boolean value back to False
                 x_y_button[1] = False
                 print(event)
 
@@ -157,8 +160,8 @@ while True:
     if rotateValue < min_value:
         rotateValue = min_value
     # Limit value to maximum; Establishs ceiling condition for second servo motor
-    if rotateValue > max_value:
-        rotateValue = max_value
+    if rotateValue > 180:
+        rotateValue = 180
 
     '''
     Archived Code: Repeated button presses to Open and Close the claw
@@ -175,9 +178,9 @@ while True:
 # Commands to send ROV
     commands = {}  # define python dictionary
     if joystick is not None:
-        x = joystick.get_axis(JoyStick.L_ANALOG_X)  # left joystick -1 is left to +1 is right (left thruster)
-        y = joystick.get_axis(JoyStick.L_ANALOG_Y)  # left joystick -1 is up +1 is down (right thruster)
-        z = joystick.get_axis(JoyStick.R_ANALOG_Y)  # right joystick x-axis, used for vertical
+        x = joystick.get_axis(1)  # left joystick -1 is left to +1 is right (left thruster)
+        y = joystick.get_axis(0)  # left joystick -1 is up +1 is down (right thruster)
+        z = joystick.get_axis(3)  # right joystick x-axis, used for vertical
 
     if abs(x) < .2:  # define a dead zone
         x = 0
@@ -191,9 +194,11 @@ while True:
         x = x * 1.414  # gives value of 1 for full thrust forward and backwards
 
     # rotate x and y-axis of joystick 45 degrees
-    x_new = (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))  # horizontal left
-    y_new = (x * math.sin(math.pi / -4)) + (y * math.cos(math.pi / -4))  # horizontal right
+    # x_new = (x * math.cos(math.pi / -4)) - ( y * math.sin(math.pi / -4))  # horizontal left inverted x and y to correct the direction
+    # y_new = (x * math.sin(math.pi / -4)) + (y * math.cos(math.pi / -4))  # horizontal right
 
+    x_new = -(x*0.707) + (y*0.707)
+    y_new = (x*0.707) + (y*0.707)
     # limits joystick values to +/- 1
     if x_new > 1:
         x_new = 1.0
@@ -215,20 +220,22 @@ while True:
 
     mLeftSlider.value = commands['tleft']  # assign thruster values to a display
     mRightSlider.value = commands['tright']
-    zSlider.value = commands['tup']
+    leftUpSlider.value = commands['tup']
+    rightUpSlider.value = commands['tup']
 
     MESSAGE = json.dumps(commands)  # puts python dictionary in Json format
     ser.write(bytes(MESSAGE, 'utf-8'))  # byte format sent to arduino
     ser.flush()
 
     try:
-        data = ser.readline().decode("utf-8")  # decode into byte from Arduino
-        dict_json = json.loads(data)  # data from arduino in dictionary form
+        data = ser.readline().decode("utf-8")  # decode into byte from Arduino in duino
+        dict_json = json.loads(data)  # data from ardictionary form
 
-        temp_display.value = dict_json['volt']  # assign temp to dispaly
+        volt_display.value = dict_json['volt']  # assign temp to dispaly
+        temp_display.value = dict_json['temp']  # assign temp to dispaly
         th_up_display.value = dict_json['sig_up_1']  # vertical thruster value from Arduino
-        th_left_display.value = dict_json['sig_lf']  # vertical thruster value from Arduino
-        th_right_display.value = dict_json['sig_rt']  # vertical thruster value from Arduino
+        th_left_display.value = dict_json['sig_lf']  # horizontal thruster value from Arduino
+        th_right_display.value = dict_json['sig_rt']  # horizontal thruster value from Arduino
         claw_display.value = dict_json['claw']  # claw value from Arduino
         rotate_display.value = dict_json['rotate']  # servo value from Arduino
 
@@ -243,7 +250,8 @@ while True:
     guiScreen.blit(onStatus.render(), (0, 0))
     guiScreen.blit(mLeftSlider.render(), (0, 9 * dheight))
     guiScreen.blit(mRightSlider.render(), (100, 9 * dheight))
-    guiScreen.blit(zSlider.render(), (200, 9 * dheight))  # blitting thruster values
+    guiScreen.blit(leftUpSlider.render(), (200, 9 * dheight))  # blitting thruster values
+    guiScreen.blit(rightUpSlider.render(), (300, 9 * dheight))  # blitting thruster values
 
     guiScreen.blit(temp_display.render(), (0, dheight))  # blitting temperature values# pick a font you have and set its size
     guiScreen.blit(th_up_display.render(), (0, 2 * dheight))
@@ -258,12 +266,13 @@ while True:
     # Rendering camera display images onto the GUI menu
     # cameraSurface.blit(img1, (0, 0))  # surface for camera 1
 
-    # screen.blit(cameraSurface, (460, 0))  
+    # screen.blit(cameraSurface, (460, 0))
     screen.blit(guiScreen, (0, 140))  # all the gui
 
     screen.blit(leftText, (15, 290))
     screen.blit(rightText, (115, 290))
-    screen.blit(ZAxisText, (215, 290))
+    screen.blit(leftUpText, (215, 290))
+    screen.blit(rightUpText, (315, 290))
 
     pygame.display.flip()  # update screen for all rectangular images
     time.sleep(0.01)

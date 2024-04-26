@@ -13,7 +13,7 @@ import json #to convert python dictionary to json format
 import serial #to communicate with Arduino Mega Board
 
 '''---DEBUGGING purpose---'''
-DEBUG = True
+DEBUG = False
 
 '''---Display purpose: window (16:9) and mac (16:10) have different screen ratios---'''
 WINDOW = False #if running on Windows, set to True
@@ -65,7 +65,8 @@ th_right_display = widgets.display("Servo Right", sideBarWidth)
 claw_display = widgets.display("Main Claw Value", sideBarWidth)
 claw_rotate_display = widgets.display("Claw rotate Value", sideBarWidth)
 
-zSlider = widgets.sliderdisplay("Z", 100, 320)
+leftUpSlider = widgets.sliderdisplay("leftUp", 100, 320)
+rightUpSlider = widgets.sliderdisplay("rightUp", 100, 320)
 mLeftSlider = widgets.sliderdisplay("LeftSlider", 100, 320)
 mRightSlider = widgets.sliderdisplay("RightSlider", 100, 320)
 
@@ -73,7 +74,8 @@ mRightSlider = widgets.sliderdisplay("RightSlider", 100, 320)
 font = pygame.font.SysFont(None, 16)
 leftText = font.render("Left", True, (255, 255, 255))
 rightText = font.render("Right", True, (255, 255, 255))
-ZAxisText = font.render("Z-axis", True, (255, 255, 255))
+leftUpText = font.render("Left Up", True, (255, 255, 255))
+rightUpText = font.render("Right Up", True, (255, 255, 255))
 Controls = font.render("User Controls: ", True, (255, 255, 255)) 
 left_button = font.render("LB: Close Claw", True, (255, 255, 255))
 right_button = font.render("RB: Open Claw", True, (255, 255, 255))
@@ -90,7 +92,7 @@ MAX_CLAW = 65 #Main Claw max value
 MIN_CLAW = 0 #Main Claw min value
 clawValue = 0 #Main Claw initial value
 
-MAX_CLAW_ROTATE = 360 #Claw rotate max value
+MAX_CLAW_ROTATE = 180 #Claw rotate max value
 MIN_CLAW_ROTATE = 0 #Claw rotate min value
 clawRotate = 0 #Claw rotate initial value
 
@@ -109,7 +111,6 @@ while True:
             
         elif event.type == pygame.JOYBUTTONDOWN:
             # print("Button {} pressed".format(event.button))
-            
             if event.button == JoyStick.A:  #for toggling max thruster status On/Off
                 onStatus.toggle()
             if event.button == JoyStick.LB and trigger_button[1] == False: #for closing the claw
@@ -123,7 +124,6 @@ while True:
                 
         elif event.type == pygame.JOYBUTTONUP:
             # print("Button {} released".format(event.button))
-            
             if event.button ==  JoyStick.LB:
                 trigger_button[0] = False
             if event.button == JoyStick.RB:
@@ -133,6 +133,7 @@ while True:
             if event.button == JoyStick.Y:
                 x_y_button[1] = False
 
+    # Assign values to the thrusters and claw
     if trigger_button[0] == True and not clawValue <= MIN_CLAW:
         clawValue -= 5
     if trigger_button[1] == True and not clawValue >= MAX_CLAW:
@@ -141,32 +142,28 @@ while True:
         clawRotate -= 5
     if x_y_button[1] == True and not clawRotate >= MAX_CLAW_ROTATE:
         clawRotate += 5
+    
+    # Get and Assign Joystick Analog values
+    turbo = 1.414 if onStatus.state else 1 #TURBO MODE
 
-    for i in range(joystick.get_numaxes()):
-        turbo = 1.414 if onStatus.state else 1 #TURBO MODE
-            
-        if i == JoyStick.L_ANALOG_X: #left joystick x-axis for rov head rotate
-            x = joystick.get_axis(i) * turbo
-            x = 0 if abs(x) < .3 else x #deadzone
-            
-        if i == JoyStick.L_ANALOG_Y: #left joystick y-axis for rov head tilt
-            y = joystick.get_axis(i) * turbo
-            y = 0 if abs(y) < .3 else y #deadzone
-            
-        if i == JoyStick.R_ANALOG_Y: #right joystick y-axis for vertical
-            z = joystick.get_axis(i) * turbo
-            z = 0 if abs(z) < .3 else z #deadzone
-            
-        ''' UNDER MAINTENANCE: Haven't tested in water yet
-        if i == JoyStick.R_ANALOG_X: #right joystick x-axis for crabbing 
-            c = joystick.get_axis(i) * turbo
-            c = 0 if abs(c) < .5 else c #deadzone '''
+    x = joystick.get_axis(JoyStick.L_ANALOG_X) * turbo
+    x = 0 if abs(x) < .3 else x #deadzone
+        
+    y = joystick.get_axis(JoyStick.L_ANALOG_Y) * turbo
+    y = 0 if abs(y) < .3 else y #deadzone
+    
+    z = joystick.get_axis(JoyStick.R_ANALOG_Y) * turbo
+    z = 0 if abs(z) < .3 else z #deadzone
+        
+    ''' UNDER MAINTENANCE: Haven't tested in water yet
+    c = joystick.get_axis(JoyStick.R_ANALOG_X) * turbo
+    c = 0 if abs(c) < .5 else c #deadzone '''
 
-    # Math for analog 45 degree angles
-    x_new = (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))
+    # Math for analog
+    x_new = -(x * 0.707) + (y * 0.707) # (x * math.cos(math.pi / -4)) - (y * math.sin(math.pi / -4))
     x_new = min(max(x_new, -1.0), 1.0) #if x_new is less than -1, x_new = -1; if x_new is greater than 1, x_new = 1
     
-    y_new = (x * math.sin(math.pi / -4)) + (y * math.cos(math.pi / -4))
+    y_new = (x * 0.707) + (y * 0.707) # x * math.sin(math.pi / -4)) + (y * math.cos(math.pi / -4))
     y_new = min(max(y_new, -1.0), 1.0)
 
     ''' UNDER MAINTENANCE: Haven't tested in water yet
@@ -180,7 +177,7 @@ while True:
     commands = {}  #define python dictionary
     commands['tleft'] = mLeftSlider.value = x_new ** 3 #cubing(x^3) the values gives more control with lower power
     commands['tright'] = mRightSlider.value = y_new ** 3
-    commands['tup'] = zSlider.value = z ** 3
+    commands['tup'] = leftUpSlider.value = rightUpSlider.value = z ** 3
     commands['claw'] = clawValue
     commands['claw_rotate'] = clawRotate
 
@@ -225,7 +222,8 @@ while True:
     guiScreen.blit(onStatus.render(), (0, 0)) #blitting the running status
     guiScreen.blit(mLeftSlider.render(), (0, 9 * dHeight)) #blitting thruster values
     guiScreen.blit(mRightSlider.render(), (100, 9 * dHeight)) #blitting thruster values
-    guiScreen.blit(zSlider.render(), (200, 9 * dHeight))  #blitting thruster values
+    guiScreen.blit(leftUpSlider.render(), (200, 9 * dHeight))  #blitting thruster values
+    guiScreen.blit(rightUpSlider.render(), (300, 9 * dHeight))  #blitting thruster values
 
     guiScreen.blit(volt_display.render(), (0, dHeight))  #blitting voltage values, pick a font you have and set its size
     guiScreen.blit(temp_display.render(), (0,2 * dHeight))  #blitting temperature values, pick a font you have and set its size
@@ -241,7 +239,8 @@ while True:
     # screen.blit(scaledImage, (10, -60))  #discord logo
     screen.blit(leftText, (15, 290))
     screen.blit(rightText, (115, 290))
-    screen.blit(ZAxisText, (215, 290))
+    screen.blit(leftUpText, (215, 290))
+    screen.blit(rightUpText, (315, 290))
     screen.blit(Controls, (720, 390))
     screen.blit(left_button, (650, 425))
     screen.blit(right_button, (650, 450))
