@@ -8,7 +8,7 @@ One thing that pop out in my mind: try to see if vscode can run arduino
 import widgets2 as widgets
 import JoyStick_constants as JoyStick
 import pygame
-import math
+# import math 
 import json #to convert python dictionary to json format
 import serial #to communicate with Arduino Mega Board
 
@@ -132,6 +132,17 @@ while True:
                 x_y_button[0] = False
             if event.button == JoyStick.Y:
                 x_y_button[1] = False
+                
+        elif event.type == pygame.JOYHATMOTION:
+            # print("Hat {} moved to {}".format(event.hat, joystick.get_hat(event.hat)))
+            if event.hat == JoyStick.HAT and joystick.get_hat(event.hat) == JoyStick.HAT_POS_X:
+                x_new = 0.5
+            elif event.hat == JoyStick.HAT and joystick.get_hat(event.hat) == JoyStick.HAT_NEG_X:
+                x_new = -0.5
+            elif event.hat == JoyStick.HAT and joystick.get_hat(event.hat) == JoyStick.HAT_POS_Y:
+                y_new = 0.5
+            elif event.hat == JoyStick.HAT and joystick.get_hat(event.hat) == JoyStick.HAT_NEG_Y:
+                y_new = -0.5
 
     # Assign values to the thrusters and claw
     if trigger_button[0] == True and not clawValue <= MIN_CLAW:

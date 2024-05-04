@@ -75,12 +75,12 @@ void loop()
   servo_rt.writeMicroseconds(th_right_sig);
 
   // Vertical Thurster 1
-  float th_up_1 = json_doc["tup"];
+  float th_up_1 = json_doc["tupL"];
   int th_up_sig_1 = (th_up_1 + 1) * 400 + 1100;
   servo_up1.writeMicroseconds(th_up_sig_1);
 
   // Vertical Thurster 2 *need to get to individual tupL and tupR datas from Python
-  float th_up_2 = json_doc["tup"];
+  float th_up_2 = json_doc["tupR"];
   int th_up_sig_2 = (th_up_2 + 1) * 400 + 1100;
   servo_up2.writeMicroseconds(th_up_sig_2);
 

@@ -42,3 +42,9 @@ L_ANALOG_Y = 1 # neg Y = forward, pos Y = backward
 L_ANALOG_X = 0 # neg X = left, pos X = right
 R_ANALOG_Y = 3 # neg Y = ascend, pos Y = descend
 R_ANALOG_X = 2 # neg X = crab left, pos X = crab right
+# Hat
+HAT = 0 # Hat 
+HAT_POS_Y = (float)[0, 1]
+HAT_NEG_Y = (float)[0, -1]
+HAT_POS_X = (float)[1, 0]
+HAT_NEG_X = (float)[-1, 0]
